@@ -1,0 +1,20 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_control_flow_attributes : enable
+
+#include "rt_generic.glsl"
+#include "math.glsl"
+
+void main()
+{
+    point_light pl = point_lights.array[gl_InstanceCustomIndexEXT];
+    vec3 pos = vec3(pl.pos_x, pl.pos_y, pl.pos_z);
+    float radius = unpackHalf2x16(pl.radius_and_cutoff_radius).x;
+
+    vec2 hits = sphere_intersection(pos, radius, gl_WorldRayOriginEXT, gl_WorldRayDirectionEXT);
+    if(hits[0] > 0) reportIntersectionEXT(hits[0], 0);
+    else if(hits[1] > 0) reportIntersectionEXT(hits[1], 0);
+}

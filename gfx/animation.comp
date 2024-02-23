@@ -1,0 +1,156 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_control_flow_attributes : enable
+
+#define MAX_ACTIVE_MORPH_TARGETS_PER_MESH 8
+#include "math.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(binding = 0, scalar) buffer position_buffer
+{
+    vec3 array[];
+} vertex_position[];
+
+layout(binding = 1, scalar) buffer normal_buffer
+{
+    vec3 array[];
+} vertex_normal[];
+
+layout(binding = 2, scalar) buffer tangent_buffer
+{
+    vec4 array[];
+} vertex_tangent[];
+
+layout(binding = 3, scalar) buffer prev_position_buffer
+{
+    vec3 array[];
+} vertex_prev_position[];
+
+layout(binding = 4, scalar) readonly buffer morph_target_weights_buffer
+{
+    float array[];
+} morph_target_weights;
+
+layout(binding = 5) readonly buffer joints_buffer
+{
+    ivec4 array[];
+} vertex_joints[];
+
+layout(binding = 6) readonly buffer weights_buffer
+{
+    vec4 array[];
+} vertex_weights[];
+
+layout(binding = 7) readonly buffer joint_matrices_buffer
+{
+    mat4 array[];
+} joint_matrices;
+
+layout(binding = 8) readonly buffer joint_dualquats_buffer
+{
+    mat2x4 array[];
+} joint_dualquats;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint morph_target_count;
+    uint morph_target_weight_offset;
+    uint vertex_count;
+
+    int base_buffer_index;
+
+    int morph_target_ptn_indices[MAX_ACTIVE_MORPH_TARGETS_PER_MESH];
+    int morph_target_has_positions;
+    int morph_target_has_normals;
+    int morph_target_has_tangents;
+
+    int dst_position_index;
+    int dst_normal_index;
+    int dst_tangent_index;
+    int dst_prev_position_index;
+
+    uint joint_count;
+    int joint_matrices_index;
+    int joint_dualquats_index;
+} pc;
+
+void main()
+{
+    uint id = gl_GlobalInvocationID.x;
+    if(id < pc.vertex_count)
+    {
+        // First off, save previous position.
+        vertex_prev_position[pc.dst_prev_position_index].array[id] =
+            vertex_position[pc.dst_position_index].array[id];
+
+        vec3 pos = vertex_position[pc.base_buffer_index].array[id];
+        vec3 normal = vertex_normal[pc.base_buffer_index].array[id];
+        vec4 tangent = vertex_tangent[pc.base_buffer_index].array[id];
+
+        // Morph targets
+        const uint loop_length =
+            min(pc.morph_target_count, MAX_ACTIVE_MORPH_TARGETS_PER_MESH);
+        for(uint i = 0; i < loop_length; ++i)
+        {
+            float weight = morph_target_weights.array[pc.morph_target_weight_offset + i];
+            if(pc.morph_target_has_positions != 0)
+                pos += weight * vertex_position[pc.morph_target_ptn_indices[i]].array[id];
+            if(pc.morph_target_has_normals != 0)
+                normal += weight * vertex_normal[pc.morph_target_ptn_indices[i]].array[id];
+            if(pc.morph_target_has_tangents != 0)
+                tangent += weight * vertex_tangent[pc.morph_target_ptn_indices[i]].array[id];
+        }
+
+        // Skeletons
+        if(pc.joint_count != 0)
+        {
+            ivec4 joints = vertex_joints[pc.base_buffer_index].array[id];
+            vec4 weights = vertex_weights[pc.base_buffer_index].array[id];
+
+            if(pc.joint_matrices_index >= 0)
+            {
+                mat4 m =
+                    weights.x * joint_matrices.array[pc.joint_matrices_index + joints.x] +
+                    weights.y * joint_matrices.array[pc.joint_matrices_index + joints.y] +
+                    weights.z * joint_matrices.array[pc.joint_matrices_index + joints.z] +
+                    weights.w * joint_matrices.array[pc.joint_matrices_index + joints.w];
+
+                pos = vec3(m * vec4(pos, 1.0f));
+
+                mat3 normal_mat = cofactor(m);
+                normal = normal_mat * normal;
+                tangent = vec4(vec3(m * vec4(tangent.xyz, 0.0)), tangent.w);
+            }
+            else if(pc.joint_dualquats_index >= 0)
+            {
+                mat2x4 j0 = joint_dualquats.array[pc.joint_dualquats_index + joints.x];
+                mat2x4 j1 = joint_dualquats.array[pc.joint_dualquats_index + joints.y];
+                mat2x4 j2 = joint_dualquats.array[pc.joint_dualquats_index + joints.z];
+                mat2x4 j3 = joint_dualquats.array[pc.joint_dualquats_index + joints.w];
+                weights.yzw *= step(vec3(0.0f), j0[0] * mat3x4(j1[0], j2[0], j3[0])) * 2.0f - 1.0f;
+                mat2x4 blended = weights.x * j0 + weights.y * j1 + weights.z * j2 + weights.w * j3;
+                blended /= length(blended[0]);
+
+                pos = dual_quat_transform(blended, pos);
+                normal = quat_rotate(blended[0], normal);
+                tangent = vec4(quat_rotate(blended[0], tangent.xyz), tangent.w);
+            }
+        }
+
+        // Normalize vector results
+        normal = normalize(normal);
+        tangent = vec4(normalize(tangent.xyz), sign(tangent.w));
+
+        // Save into outputs!
+        vertex_position[pc.dst_position_index].array[id] = pos;
+
+        if(pc.dst_normal_index >= 0)
+            vertex_normal[pc.dst_normal_index].array[id] = normal;
+
+        if(pc.dst_tangent_index >= 0)
+            vertex_tangent[pc.dst_tangent_index].array[id] = tangent;
+    }
+}

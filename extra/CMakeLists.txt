@@ -1,0 +1,38 @@
+cmake_minimum_required(VERSION 3.19)
+include(ProcessorCount)
+
+project(RaybaseExtra LANGUAGES C CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(NOT RAYBASE_CORE_INCLUDE OR NOT RAYBASE_CORE_LIBRARY)
+    message(FATAL_ERROR "You must define RAYBASE_CORE_INCLUDE and RAYBASE_CORE_LIBRARY")
+endif()
+if(NOT RAYBASE_GFX_INCLUDE OR NOT RAYBASE_GFX_LIBRARY)
+    message(FATAL_ERROR "You must define RAYBASE_GFX_INCLUDE and RAYBASE_GFX_LIBRARY")
+endif()
+if(NOT RAYBASE_PHYS_INCLUDE OR NOT RAYBASE_PHYS_LIBRARY)
+    message(FATAL_ERROR "You must define RAYBASE_PHYS_INCLUDE and RAYBASE_PHYS_LIBRARY")
+endif()
+
+set(SHADER_INCLUDE_DIRS ${RAYBASE_ROOT}/gfx)
+
+add_library(raybase-extra STATIC
+    external/tiny_gltf.cc
+    game_object.cc
+    gltf.cc
+)
+target_link_libraries(raybase-extra PUBLIC ${RAYBASE_CORE_LIBRARY} ${RAYBASE_PHYS_LIBRARY} ${RAYBASE_GFX_LIBRARY})
+ProcessorCount(NUM_CORES)
+
+set_property(TARGET raybase-extra PROPERTY CXX_STANDARD 17)
+set_property(TARGET raybase-extra PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET raybase-extra PROPERTY CXX_EXTENSIONS OFF)
+
+set(RAYBASE_EXTRA_INCLUDE
+    "${CMAKE_CURRENT_SOURCE_DIR}/external"
+)
+set(RAYBASE_EXTRA_INCLUDE ${RAYBASE_EXTRA_INCLUDE} PARENT_SCOPE)
+set(RAYBASE_EXTRA_LIBRARY raybase-extra PARENT_SCOPE)
+target_include_directories(raybase-extra PUBLIC ${RAYBASE_EXTRA_INCLUDE} ${RAYBASE_CORE_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR})
+

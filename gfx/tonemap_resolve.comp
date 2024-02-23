@@ -1,0 +1,38 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout(constant_id = 0) const uint SAMPLE_COUNT = 1;
+layout(constant_id = 1) const uint TILE_SIZE = 1;
+layout(local_size_x_id = 1, local_size_y_id = 1, local_size_z_id = 0) in;
+
+#include "tonemap.glsl"
+
+layout(binding = 2, rgba32f) readonly uniform image2DMS src_target;
+layout(binding = 3, rgba32f) writeonly uniform image2D dst_target;
+
+shared vec4 colors[TILE_SIZE][TILE_SIZE][SAMPLE_COUNT];
+
+void main()
+{
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+    if(all(lessThan(p, pc.size)))
+    {
+        vec4 col = imageLoad(src_target, p, int(gl_LocalInvocationID.z));
+        apply_parametric_transforms(col);
+        apply_tonemapping(col);
+        apply_lookup_texture(col);
+        colors[gl_LocalInvocationID.x][gl_LocalInvocationID.y][gl_LocalInvocationID.z] = col / SAMPLE_COUNT;
+        barrier();
+
+        vec4 avg = vec4(0);
+        for(int i = 0; i < SAMPLE_COUNT; ++i)
+            avg += colors[gl_LocalInvocationID.x][gl_LocalInvocationID.y][i];
+
+        apply_correction(avg);
+        if(gl_LocalInvocationID.z == 0)
+            imageStore(dst_target, p, avg);
+    }
+}
+
+

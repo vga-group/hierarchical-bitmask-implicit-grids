@@ -1,0 +1,33 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "color.glsl"
+#include "math.glsl"
+#include "alias_table.glsl"
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform samplerCube environment;
+layout(binding = 1, scalar) writeonly buffer alias_table_buffer
+{
+    float entries[];
+} alias_table;
+
+void main()
+{
+    ivec2 size = textureSize(environment, 0).xy;
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    int layer = int(gl_GlobalInvocationID.z);
+    if(p.x < size.x && p.y < size.y)
+    {
+        int pixel_id = p.x + p.y * size.x + layer * size.x * size.y;
+        vec3 color = textureLod(
+            environment, pixel_id_to_cubemap_direction(pixel_id, vec2(0.5), size), 0).rgb;
+        float importance = luminance(color);
+        importance *= texel_solid_angle(p.xy, size);
+        alias_table.entries[pixel_id] = importance;
+    }
+}
+
+

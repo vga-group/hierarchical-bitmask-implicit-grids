@@ -1,0 +1,54 @@
+#version 460
+layout(binding = 0) buffer cluster_ranges_buffer
+{
+    uint items[];
+} cluster_ranges;
+
+layout(binding = 1) buffer cluster_buffer
+{
+    uint slices[];
+} cluster_slices;
+
+layout(local_size_x = 32, local_size_y = 4) in;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint range_axis_offset;
+    uint cluster_axis_offset;
+    uint cluster_size;
+    uint item_count;
+    uint axis;
+} pc;
+
+shared uvec2 ranges[128];
+
+const uint BITS_IN_MASK = 32;
+
+void main()
+{
+    uint slice = gl_GlobalInvocationID.x;
+
+    uint item_index = gl_GlobalInvocationID.y * BITS_IN_MASK + gl_LocalInvocationID.x;
+    uint range = cluster_ranges.items[pc.range_axis_offset + item_index];
+    ranges[gl_LocalInvocationID.y * BITS_IN_MASK + gl_LocalInvocationID.x] =
+        (item_index < pc.item_count ?
+            uvec2(range & 0xFFFFu, range >> 16u) : uvec2(0xFFFF, 0x0000));
+
+    barrier();
+
+    uint mask = 0;
+    for(int i = 0; i < BITS_IN_MASK; ++i)
+    {
+        uvec2 range = ranges[gl_LocalInvocationID.y * BITS_IN_MASK + i];
+        if(slice >= range.x && slice <= range.y)
+            mask |= 1 << i;
+    }
+
+    if(slice < pc.cluster_size)
+    {
+        cluster_slices.slices[
+            pc.cluster_axis_offset + slice * gl_NumWorkGroups.y * gl_WorkGroupSize.y + gl_GlobalInvocationID.y
+        ] = mask;
+    }
+}
+

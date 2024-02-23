@@ -1,0 +1,68 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_control_flow_attributes : enable
+
+#include "scene.glsl"
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0, set = 0) writeonly buffer out_tri_light_buffer
+{
+    tri_light array[];
+} out_tri_lights;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint triangle_offset;
+    uint triangle_count;
+    uint instance_id;
+} pc;
+
+void main()
+{
+    uint primitive = gl_GlobalInvocationID.x;
+    if(primitive < pc.triangle_count)
+    {
+        instance i = instances.array[pc.instance_id];
+
+        tri_light light;
+        light.emission_factor = i.material.emission;
+        light.emission_tex = i.material.normal_emission_textures>>16;
+
+        uint mesh = i.buffer_index;
+
+        uint index0 = indices[nonuniformEXT(mesh)].array[3*primitive+0];
+        uint index1 = indices[nonuniformEXT(mesh)].array[3*primitive+1];
+        uint index2 = indices[nonuniformEXT(mesh)].array[3*primitive+2];
+
+        vec3 pos0 = vertex_position[nonuniformEXT(mesh)].array[index0];
+        vec3 pos1 = vertex_position[nonuniformEXT(mesh)].array[index1];
+        vec3 pos2 = vertex_position[nonuniformEXT(mesh)].array[index2];
+
+        pos0 = (i.model_to_world * vec4(pos0, 1)).xyz;
+        pos1 = (i.model_to_world * vec4(pos1, 1)).xyz;
+        pos2 = (i.model_to_world * vec4(pos2, 1)).xyz;
+
+        light.instance_id = pc.instance_id;
+        light.triangle_id = primitive;
+
+        vec2 uv0 = vec2(0);
+        vec2 uv1 = vec2(0);
+        vec2 uv2 = vec2(0);
+
+        if(light.emission_tex != UNUSED_TEXTURE && (i.attribute_mask & ATTRIB_TEXTURE_UV) != 0)
+        {
+            uv0 = vertex_texture_uv[nonuniformEXT(mesh)].array[index0];
+            uv1 = vertex_texture_uv[nonuniformEXT(mesh)].array[index1];
+            uv2 = vertex_texture_uv[nonuniformEXT(mesh)].array[index2];
+        }
+
+        light.corners[0] = vec4(pos0, uintBitsToFloat(packHalf2x16(uv0)));
+        light.corners[1] = vec4(pos1, uintBitsToFloat(packHalf2x16(uv1)));
+        light.corners[2] = vec4(pos2, uintBitsToFloat(packHalf2x16(uv2)));
+        out_tri_lights.array[pc.triangle_offset + gl_GlobalInvocationID.x] = light;
+    }
+}
+

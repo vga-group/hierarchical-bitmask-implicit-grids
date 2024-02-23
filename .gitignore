@@ -1,0 +1,14 @@
+compile_commands.json
+build
+*.swp
+*.swo
+datasrc
+TODO
+debug
+release
+*.rbbundle
+data
+__pycache__
+.cache
+CMakeCache.txt
+CMakeFiles

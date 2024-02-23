@@ -1,0 +1,48 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "decal.glsl"
+#include "clustering.glsl"
+#include "math.glsl"
+
+layout(binding = 3, set = 0) buffer decal_order_buffer
+{
+    uvec2 pairs[];
+} decal_order;
+
+layout(binding = 4, set = 0) readonly buffer decal_metadata_buffer
+{
+    decal_metadata array[];
+} decal_metadatas;
+
+layout(local_size_x = 64) in;
+
+layout(push_constant, scalar) uniform push_constant_buffer
+{
+    vec4 bounds_min;
+    vec4 bounds_step;
+    uint decal_count;
+    uint morton_shift;
+    uint morton_bits;
+} pc;
+
+void main()
+{
+    uint decal_index = gl_GlobalInvocationID.x;
+
+    if(decal_index < pc.decal_count)
+    {
+        decal_metadata dm = decal_metadatas.array[decal_index];
+        vec3 pos = vec3(dm.pos_x, dm.pos_y, dm.pos_z);
+        uvec3 coord = min(
+            uvec3((pos - pc.bounds_min.xyz) / pc.bounds_step.xyz),
+            uvec3((1<<(32/CLUSTER_AXIS_COUNT)))-1
+        );
+        uint morton = morton_encode_3d(coord);
+        decal_order.pairs[decal_index] = uvec2(
+            decal_index,
+            ((dm.order & 0xFF) << 24) | (morton << pc.morton_shift)
+        );
+    }
+}

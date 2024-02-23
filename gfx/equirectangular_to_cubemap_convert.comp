@@ -1,0 +1,25 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "color.glsl"
+#include "math.glsl"
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D src;
+layout(binding = 1, rgba32f) uniform imageCube dst;
+
+void main()
+{
+    ivec2 size = imageSize(dst).xy;
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    int face = int(gl_GlobalInvocationID.z);
+    if(p.x < size.x && p.y < size.y)
+    {
+        vec2 dst_uv = (vec2(p)+0.5f) / vec2(size);
+        vec3 view = normalize(unproject_cubemap_dir(dst_uv, face));
+        vec2 uv = vec2(atan(view.z, view.x) * 0.5f, asin(view.y)) / M_PI + 0.5f;
+        imageStore(dst, ivec3(p, face), textureLod(src, uv, 0.0));
+    }
+}

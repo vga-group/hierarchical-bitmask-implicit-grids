@@ -1,0 +1,53 @@
+#version 460
+layout(binding = 1) readonly buffer cluster_slice_buffer
+{
+    uvec4 slices[];
+} cluster_slices;
+
+layout(binding = 2) writeonly buffer hierarchy_slice_buffer
+{
+    uint slices[];
+} hierarchy_slices;
+
+layout(local_size_x = 1, local_size_y = 256) in;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint cluster_axis_offset;
+    uint hierarchy_axis_offset;
+    uint cluster_slice_size;
+    uint hierarchy_slice_size;
+    uint axis;
+} pc;
+
+// Oversized to support very small subgroups.
+shared uint bitmasks[8];
+
+void main()
+{
+    uint slice = gl_GlobalInvocationID.x;
+    uint cluster_bitmask_index = gl_GlobalInvocationID.y;
+    uint group = gl_LocalInvocationID.y/32u;
+    uint local_id = gl_LocalInvocationID.y%32u;
+
+    if(local_id == 0)
+        bitmasks[group] = 0;
+
+    barrier();
+
+    uint local_bitmask = uint(0);
+    if(cluster_bitmask_index < pc.cluster_slice_size)
+    {
+        uvec4 bm = cluster_slices.slices[pc.cluster_axis_offset + slice * pc.cluster_slice_size + cluster_bitmask_index];
+        if(any(notEqual(bm, uvec4(0))))
+            atomicOr(bitmasks[group], 1u << local_id);
+    }
+
+    barrier();
+
+    uint total_bitmask = bitmasks[group];
+
+    uint hierarchy_bitmask_index = gl_WorkGroupID.y * 8u + group;
+    if(local_id == 0 && hierarchy_bitmask_index < pc.hierarchy_slice_size)
+        hierarchy_slices.slices[pc.hierarchy_axis_offset + slice * pc.hierarchy_slice_size + hierarchy_bitmask_index] = total_bitmask;
+}

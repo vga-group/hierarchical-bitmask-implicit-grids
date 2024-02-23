@@ -1,0 +1,25 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2DArray src;
+layout(binding = 1, rgba32f) writeonly uniform image2D dst;
+
+void main()
+{
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    const ivec3 src_size = textureSize(src, 0);
+    const ivec2 dst_size = imageSize(dst);
+
+    if(any(greaterThanEqual(p, dst_size.xy)))
+        return;
+
+    vec2 uv = (vec2(p.xy) + 0.5) / dst_size;
+    vec4 color = vec4(0);
+
+    for(int i = 0; i < src_size.z; ++i)
+        color += texture(src, vec3(uv, i));
+    color /= src_size.z;
+    imageStore(dst, p, color);
+}
+

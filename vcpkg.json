@@ -1,0 +1,11 @@
+{
+  "name": "raybase",
+  "version-string": "0.0.0",
+  "dependencies": [
+    "glm",
+    "tinygltf",
+    "vulkan-memory-allocator",
+    "stb",
+    "libevent"
+  ]
+}

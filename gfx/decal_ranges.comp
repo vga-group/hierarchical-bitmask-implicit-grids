@@ -1,0 +1,75 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+#include "decal.glsl"
+#include "clustering.glsl"
+
+layout(binding = 6, set = 1) readonly buffer decal_buffer
+{
+    decal array[];
+} decals;
+
+layout(binding = 0, set = 0) buffer decal_cluster_ranges_buffer
+{
+    uint decals[];
+} decal_cluster_ranges;
+
+layout(local_size_x = 128) in;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint range_axis_offset;
+    uint decal_count;
+    uint axis_index;
+    uint use_metadata;
+    float decal_cluster_slice;
+    float decal_cluster_min;
+} pc;
+
+uint range_to_integer(vec2 range)
+{
+    range = (range - pc.decal_cluster_min)/pc.decal_cluster_slice;
+    uvec2 urange = max(uvec2(floor(range)), uvec2(0));
+    return (urange.x & 0xFFFF) | (urange.y << 16);
+}
+
+void main()
+{
+    uint decal_index = gl_GlobalInvocationID.x;
+
+    if(decal_index < pc.decal_count)
+    {
+        decal d = decals.array[decal_index];
+
+        mat4 obb_to_world = inverse(transpose(d.world_to_obb));
+        float xrange = obb_to_world[0][pc.axis_index];
+        float yrange = obb_to_world[1][pc.axis_index];
+        float zrange = obb_to_world[2][pc.axis_index];
+        float pos = obb_to_world[3][pc.axis_index];
+
+        float values[8] = float[](
+            pos + xrange - yrange + zrange,
+            pos + xrange - yrange - zrange,
+            pos + xrange + yrange + zrange,
+            pos + xrange + yrange - zrange,
+            pos - xrange - yrange + zrange,
+            pos - xrange - yrange - zrange,
+            pos - xrange + yrange + zrange,
+            pos - xrange + yrange - zrange
+        );
+
+        float decal_min = min(
+            min(min(values[0], values[1]), min(values[2], values[3])),
+            min(min(values[4], values[5]), min(values[6], values[7]))
+        );
+        float decal_max = max(
+            max(max(values[0], values[1]), max(values[2], values[3])),
+            max(max(values[4], values[5]), max(values[6], values[7]))
+        );
+
+        uint range = range_to_integer(vec2(decal_min, decal_max));
+        decal_cluster_ranges.decals[pc.range_axis_offset + decal_index] = range;
+    }
+    else decal_cluster_ranges.decals[pc.range_axis_offset + decal_index] = 0x0000FFFF;
+}
+

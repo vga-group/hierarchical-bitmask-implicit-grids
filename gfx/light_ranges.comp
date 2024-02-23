@@ -1,0 +1,63 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+#include "light.glsl"
+
+layout(binding = 3, set = 1) readonly buffer point_light_buffer
+{
+    point_light array[];
+} point_lights;
+
+layout(binding = 0, set = 0) buffer light_cluster_ranges_buffer
+{
+    uint lights[];
+} light_cluster_ranges;
+
+layout(local_size_x = 128) in;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint range_axis_offset;
+    uint point_light_count;
+    uint axis_index;
+    uint use_metadata;
+    float light_cluster_slice;
+    float light_cluster_min;
+    float visibility_bias;
+} pc;
+
+uint range_to_integer(vec2 range)
+{
+    range = (range - pc.light_cluster_min)/pc.light_cluster_slice;
+    uvec2 urange = max(uvec2(floor(range)), uvec2(0));
+    return (urange.x & 0xFFFF) | (urange.y << 16);
+}
+
+void main()
+{
+    uint light_index = gl_GlobalInvocationID.x;
+
+    if(light_index < pc.point_light_count)
+    {
+        point_light pl = point_lights.array[light_index];
+
+        float light_center = vec3(pl.pos_x, pl.pos_y, pl.pos_z)[pc.axis_index];
+        float cutoff_radius = unpackHalf2x16(pl.radius_and_cutoff_radius).y;
+        float light_min = light_center - cutoff_radius;
+        float light_max = light_center + cutoff_radius;
+
+        float spot_radius = unpackHalf2x16(pl.shadow_map_index_and_spot_radius).y;
+        if(spot_radius > 0.0f)
+        { // Spotlight can potentially further tighten the bounds
+            float pd = octahedral_decode(unpackSnorm2x16(pl.direction))[pc.axis_index];
+            float e = sqrt(1.0f - pd * pd);
+            float pe = light_center + pd * cutoff_radius;
+            light_min = max(min(light_center, pe - e * spot_radius), light_min);
+            light_max = min(max(light_center, pe + e * spot_radius), light_max);
+        }
+
+        uint range = range_to_integer(vec2(light_min, light_max));
+        light_cluster_ranges.lights[pc.range_axis_offset + light_index] = range;
+    }
+    else light_cluster_ranges.lights[pc.range_axis_offset + light_index] = 0x0000FFFF;
+}

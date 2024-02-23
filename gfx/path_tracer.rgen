@@ -1,0 +1,39 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_control_flow_attributes : enable
+
+#include "path_tracer.glsl"
+
+layout(push_constant) uniform push_constant_buffer
+{
+    path_tracer_config config;
+    uint sample_index;
+    uint camera_index;
+    float blend_ratio;
+} pc;
+
+#include "path_tracer_core.glsl"
+
+layout(binding = 0, rgba32f) uniform image2D color_target;
+
+void main()
+{
+    ivec2 p = ivec2(gl_LaunchIDEXT.xy);
+    uvec4 seed = uvec4(p, pc.camera_index, pc.sample_index);
+    pcg4d(seed);
+
+    vec3 view = vec3(0);
+    vec3 origin = vec3(0);
+    get_camera_ray(pc.camera_index, p, seed, origin, view);
+
+    vec3 output_color = trace_path(seed, origin, view);
+
+    vec3 prev_color = vec3(0);
+    if(pc.blend_ratio < 1.0f)
+        prev_color = imageLoad(color_target, p).rgb;
+
+    imageStore(color_target, p, vec4(mix(prev_color, output_color, pc.blend_ratio), 1));
+}

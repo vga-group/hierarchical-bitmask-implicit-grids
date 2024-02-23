@@ -1,0 +1,44 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "light.glsl"
+#include "math.glsl"
+
+layout(binding = 3, set = 0) buffer light_morton_buffer
+{
+    uvec2 pairs[];
+} point_light_morton;
+
+layout(binding = 4, set = 0) readonly buffer point_light_buffer
+{
+    point_light array[];
+} point_lights;
+
+layout(local_size_x = 64) in;
+
+layout(push_constant, scalar) uniform push_constant_buffer
+{
+    vec4 bounds_min;
+    vec4 bounds_step;
+    uint point_light_count;
+    uint morton_shift;
+    uint morton_bits;
+} pc;
+
+void main()
+{
+    uint light_index = gl_GlobalInvocationID.x;
+
+    if(light_index < pc.point_light_count)
+    {
+        point_light pl = point_lights.array[light_index];
+        vec3 pos = vec3(pl.pos_x, pl.pos_y, pl.pos_z);
+        uvec3 coord = min(
+            uvec3((pos - pc.bounds_min.xyz) / pc.bounds_step.xyz),
+            uvec3((1<<(32/CLUSTER_AXIS_COUNT)))-1
+        );
+        uint morton = morton_encode_3d(coord);
+        point_light_morton.pairs[light_index] = uvec2(light_index, morton << pc.morton_shift);
+    }
+}

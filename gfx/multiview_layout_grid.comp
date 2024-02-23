@@ -1,0 +1,49 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2DArray src;
+layout(binding = 1, rgba32f) writeonly uniform image2D dst;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    vec4 fill_color;
+    int grid_width;
+    uint scale_to_fit;
+} pc;
+
+void main()
+{
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    const ivec3 src_size = textureSize(src, 0);
+    const ivec2 dst_size = imageSize(dst);
+
+    if(any(greaterThanEqual(p, dst_size.xy)))
+        return;
+
+    vec4 color = pc.fill_color;
+    if(pc.scale_to_fit == 0)
+    {
+        ivec2 i = p / src_size.xy;
+        ivec2 q = p % src_size.xy;
+
+        int j = i.x + i.y * pc.grid_width;
+        if(i.x < pc.grid_width && j < src_size.z)
+            color = texelFetch(src, ivec3(q, j), 0);
+    }
+    else
+    {
+        vec2 s = vec2(
+            float(pc.grid_width * (p.x + 0.5f)) / dst_size.x,
+            float(pc.grid_width * src_size.x * (p.y + 0.5f)) / (dst_size.x * src_size.y)
+        );
+
+        ivec2 i = ivec2(s);
+        i.x = clamp(i.x, 0, pc.grid_width-1);
+        vec2 q = s - i;
+        int j = i.x + i.y * pc.grid_width;
+        if(j < src_size.z)
+            color = texture(src, vec3(q, j));
+    }
+    imageStore(dst, p, color);
+}

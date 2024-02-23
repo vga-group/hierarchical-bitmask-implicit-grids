@@ -1,0 +1,44 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "light_clustering_metadata.glsl"
+
+layout(binding = 0, set = 0) readonly buffer prev_light_metadata_buffer
+{
+    light_range_metadata array[];
+} prev_light_metadata;
+
+layout(binding = 1, set = 0) writeonly buffer light_metadata_buffer
+{
+    light_range_metadata array[];
+} light_metadata;
+
+layout(binding = 2, set = 0, scalar) readonly buffer light_equivalence_buffer
+{
+    int array[];
+} light_equivalence;
+
+layout(local_size_x = 128) in;
+
+layout(push_constant, scalar) uniform push_constant_buffer
+{
+    uint light_count;
+} pc;
+
+void main()
+{
+    uint light_index = gl_GlobalInvocationID.x;
+
+    if(light_index < pc.light_count)
+    {
+        light_range_metadata metadata;
+        metadata.bounds_min = vec4(vec3(1e38), 0.0f);
+        metadata.bounds_max = vec4(vec3(-1e38), 0.0f);
+
+        int i = light_equivalence.array[light_index];
+        if(i >= 0) metadata = prev_light_metadata.array[i];
+
+        light_metadata.array[light_index] = metadata;
+    }
+}

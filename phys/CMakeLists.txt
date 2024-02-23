@@ -1,0 +1,54 @@
+cmake_minimum_required(VERSION 3.19)
+
+project(RaybasePhys LANGUAGES C CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(NOT RAYBASE_CORE_INCLUDE OR NOT RAYBASE_CORE_LIBRARY)
+    message(FATAL_ERROR "You must define RAYBASE_CORE_INCLUDE and RAYBASE_CORE_LIBRARY")
+endif()
+
+set(USE_DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
+set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(USE_SOFT_BODY_MULTI_BODY_DYNAMICS_WORLD ON CACHE BOOL "" FORCE)
+set(USE_OPENVR OFF CACHE BOOL "" FORCE)
+set(ENABLE_VHACD OFF CACHE BOOL "" FORCE)
+set(BULLET2_MULTITHREADING ON CACHE BOOL "" FORCE)
+set(BUILD_CPU_DEMOS OFF CACHE BOOL "" FORCE)
+set(USE_GLUT OFF CACHE BOOL "" FORCE)
+set(BUILD_PYBULLET OFF CACHE BOOL "" FORCE)
+set(BUILD_ENET OFF CACHE BOOL "" FORCE)
+set(BUILD_CLSOCKET OFF CACHE BOOL "" FORCE)
+set(BUILD_EGL OFF CACHE BOOL "" FORCE)
+set(BUILD_OPENGL3_DEMOS OFF CACHE BOOL "" FORCE)
+set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+set(BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_BULLET3 OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/bullet3)
+
+add_library(raybase-phys STATIC
+    collider.cc
+    collision.cc
+    collision_system.cc
+    constraint.cc
+    context.cc
+    shape.cc
+    simulator.cc
+    skeleton_collider.cc
+)
+target_link_libraries(raybase-phys PUBLIC ${RAYBASE_CORE_LIBRARY})
+target_link_libraries(raybase-phys PRIVATE BulletDynamics BulletCollision BulletSoftBody LinearMath Bullet3Common)
+
+set_property(TARGET raybase-phys PROPERTY CXX_STANDARD 17)
+set_property(TARGET raybase-phys PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET raybase-phys PROPERTY CXX_EXTENSIONS OFF)
+
+set(RAYBASE_PHYS_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/external")
+set(RAYBASE_PHYS_INCLUDE ${RAYBASE_PHYS_INCLUDE} PARENT_SCOPE)
+set(RAYBASE_PHYS_LIBRARY raybase-phys PARENT_SCOPE)
+target_include_directories(raybase-phys PUBLIC ${RAYBASE_PHYS_INCLUDE} ${RAYBASE_CORE_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(raybase-phys PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/external/bullet3/src")
+
+if(RAYBASE_GFX_INCLUDE AND RAYBASE_GFX_LIBRARY)
+endif()

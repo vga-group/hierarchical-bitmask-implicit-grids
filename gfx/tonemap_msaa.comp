@@ -1,0 +1,30 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+#include "tonemap.glsl"
+
+layout(binding = 2, rgba32f) readonly uniform image2DMS src_target;
+layout(binding = 3, rgba32f) writeonly uniform image2DMS dst_target;
+
+void main()
+{
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+    if(all(lessThan(p, pc.size)))
+    {
+        uint sample_count = imageSamples(src_target);
+        for(int i = 0; i < sample_count; ++i)
+        {
+            vec4 col = imageLoad(src_target, p, i);
+            apply_parametric_transforms(col);
+            apply_tonemapping(col);
+            apply_lookup_texture(col);
+            apply_correction(col);
+            imageStore(dst_target, p, i, col);
+        }
+    }
+}
+
+

@@ -1,0 +1,2 @@
+file(READ ${APPEND_FILE} content)
+file(WRITE ${APPEND_FILE} "${PREPEND_CONTENT}${content};${APPEND_CONTENT}")

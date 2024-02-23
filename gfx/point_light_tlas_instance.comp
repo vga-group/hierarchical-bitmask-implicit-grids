@@ -1,0 +1,65 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+#include "light.glsl"
+
+struct VkAccelerationStructureInstanceKHR
+{
+    vec4 transform[3];
+    uint instanceCustomIndex24_mask8;
+    uint instanceShaderBindingTableRecordOffset24_flags8;
+    uint accelerationStructureReference[2];
+};
+
+layout(binding = 3, set = 1) readonly buffer point_light_buffer
+{
+    point_light array[];
+} point_lights;
+
+layout(binding = 0, set = 0, scalar) buffer tlas_instances_buffer
+{
+    VkAccelerationStructureInstanceKHR instances[];
+} tlas_instances;
+
+layout(local_size_x = 128) in;
+
+layout(push_constant, scalar) uniform push_constant_buffer
+{
+    uint initial_index;
+    uint point_light_count;
+    uint mask;
+    uint flags;
+    uint sbt_offset;
+    uint as_reference[2];
+} pc;
+
+void main()
+{
+    uint light_index = gl_GlobalInvocationID.x;
+
+    if(light_index < pc.point_light_count)
+    {
+        point_light pl = point_lights.array[light_index];
+        vec3 pos = vec3(pl.pos_x, pl.pos_y, pl.pos_z);
+        float radius = unpackHalf2x16(pl.radius_and_cutoff_radius).x;
+
+        mat4 transform = mat4(radius);
+        transform[3] = vec4(pos, 1);
+        transform = transpose(transform);
+
+        VkAccelerationStructureInstanceKHR instance;
+        instance.transform[0] = transform[0];
+        instance.transform[1] = transform[1];
+        instance.transform[2] = transform[2];
+
+        // The radius check essentially removes zero-radius lights from the AS,
+        // as the zero mask makes it completely impossible to intersect.
+        instance.instanceCustomIndex24_mask8 = light_index | ((radius == 0 ? 0u : pc.mask) << 24);
+        instance.instanceShaderBindingTableRecordOffset24_flags8 = pc.sbt_offset | (pc.flags << 24);
+        instance.accelerationStructureReference[0] = pc.as_reference[0];
+        instance.accelerationStructureReference[1] = pc.as_reference[1];
+
+        tlas_instances.instances[pc.initial_index + light_index] = instance;
+    }
+}

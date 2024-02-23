@@ -1,0 +1,41 @@
+#version 460
+#extension GL_EXT_control_flow_attributes : enable
+
+layout(binding = 0) readonly buffer payload_input_buffer
+{
+    uvec4 array[];
+} payload_in;
+
+layout(binding = 1) writeonly buffer payload_output_buffer
+{
+    uvec4 array[];
+} payload_out;
+
+layout(binding = 2) readonly buffer keyval_buffer
+{
+    uvec2 array[];
+} keyvals;
+
+layout(local_size_x = 64) in;
+
+layout(constant_id = 0) const uint PAYLOAD_SIZE = 1;
+
+layout(push_constant) uniform push_constant_buffer
+{
+    uint entry_count;
+    uint payload_size;
+} pc;
+
+void main()
+{
+    uint entry_index = gl_GlobalInvocationID.x;
+
+    if(entry_index < pc.entry_count)
+    {
+        uint source_index = keyvals.array[entry_index].x;
+        for(uint i = 0; i < pc.payload_size; ++i)
+            payload_out.array[entry_index * pc.payload_size + i] = payload_in.array[source_index * pc.payload_size + i];
+    }
+}
+
+

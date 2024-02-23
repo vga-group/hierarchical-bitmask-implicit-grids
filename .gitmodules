@@ -1,0 +1,31 @@
+[submodule "datagen/external/cmft"]
+	path = datagen/external/cmft
+	url = https://github.com/dariomanesku/cmft.git
+[submodule "datagen/external/msdfgen"]
+	path = datagen/external/msdfgen
+	url = https://github.com/Chlumsky/msdfgen.git
+[submodule "gfx/external/volk"]
+	path = gfx/external/volk
+	url = https://github.com/zeux/volk.git
+[submodule "gfx/external/Vulkan-Headers"]
+	path = gfx/external/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "gfx/external/Vulkan-Loader"]
+	path = gfx/external/Vulkan-Loader
+	url = https://github.com/KhronosGroup/Vulkan-Loader.git
+[submodule "gfx/external/VulkanMemoryAllocator"]
+	path = gfx/external/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "gfx/external/SPIRV-Reflect"]
+	path = gfx/external/SPIRV-Reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+[submodule "gfx/external/fuchsia_radix_sort"]
+	path = gfx/external/fuchsia_radix_sort
+	url = git@github.com:juliusikkala/fuchsia_radix_sort.git
+    branch = portability
+[submodule "audio/external/LabSound"]
+	path = audio/external/LabSound
+    url = https://github.com/juliusikkala/LabSound.git
+[submodule "phys/external/bullet3"]
+	path = phys/external/bullet3
+	url = https://github.com/bulletphysics/bullet3.git
