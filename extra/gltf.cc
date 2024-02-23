@@ -443,9 +443,8 @@ collider create_gltf_collider(
     transformable* tnode,
     bool is_bone_collider
 ){
-    const tinygltf::Value& col_data = engine_data->Get("collision");
     phys::shape::params params = {
-        (float)col_data.Get("margin").GetNumberAsDouble(),
+        0.04f,
         tnode->get_global_scaling()
     };
     if(is_bone_collider)
@@ -455,25 +454,15 @@ collider create_gltf_collider(
     }
     s->reset(params);
 
-    std::string type = col_data.Get("type").Get<std::string>();
-    bool kinematic = col_data.Get("kinematic").Get<bool>();
-    float friction = col_data.Get("friction").GetNumberAsDouble();
-    float restitution = col_data.Get("restitution").GetNumberAsDouble();
-    float linear_damping =
-        col_data.Get("linear_damping").GetNumberAsDouble();
-    float angular_damping =
-        col_data.Get("angular_damping").GetNumberAsDouble();
-    float mass = max(col_data.Get("mass").GetNumberAsDouble(), 0.0);
-    bool use_deactivation = col_data.Has("use_deactivation") ?
-        col_data.Get("use_deactivation").Get<bool>() : true;
-    uint32_t categories = phys::collider::DYNAMIC;
-    uint32_t mask = phys::collider::ALL;
-
-    if(mass == 0 || type == "PASSIVE")
-    {
-        categories = (kinematic ? phys::collider::KINEMATIC : phys::collider::STATIC);
-        mask = phys::collider::DYNAMIC;
-    }
+    bool kinematic = false;
+    float friction = 0;
+    float restitution = 0;
+    float linear_damping = 0;
+    float angular_damping = 0;
+    float mass = 0;
+    bool use_deactivation = true;
+    uint32_t categories = phys::collider::STATIC;
+    uint32_t mask = phys::collider::DYNAMIC;
 
     phys::collider c(s, categories, mask, mass);
     c.set_friction(friction);
@@ -1706,71 +1695,27 @@ void gltf_data::load_resources(
         if(!pctx) continue;
 
         tinygltf::Node& node = gltf_model.nodes[i];
-        if(!node.extensions.count("RB_engine_data"))
-            continue;
+        //if(!node.extensions.count("RB_engine_data"))
+        //    continue;
 
-        tinygltf::Value& engine_data = node.extensions["RB_engine_data"];
-        if(!engine_data.Has("collision"))
-            continue;
+        //tinygltf::Value& engine_data = node.extensions["RB_engine_data"];
+        //if(!engine_data.Has("collision"))
+        //    continue;
 
-        const tinygltf::Value& collision_data = engine_data.Get("collision");
         phys::shape* shape = nullptr;
-        int mesh_id = collision_data.Get("mesh").GetNumberAsInt();
+        int mesh_id = node.mesh;
         tinygltf::Mesh& mesh = gltf_model.meshes[mesh_id];
-        std::string shape_type = collision_data.Get("shape").Get<std::string>();
-        phys::shape::params params = {
-            (float)collision_data.Get("margin").GetNumberAsDouble()
-        };
+        phys::shape::params params = {};
 
         aabb bounding_box;
         const model* mod = &meta.models.at(mesh.name);
         if(!mod->m || !mod->m->get_bounding_box(bounding_box))
             RB_PANIC("Cannot create collision shape; missing bounding box!");
 
-        if(shape_type == "BOX")
-            shape = new phys::shape(*pctx, phys::shape::box(bounding_box), params);
-        else if(shape_type == "SPHERE")
-            shape = new phys::shape(*pctx, phys::shape::sphere(bounding_box), params);
-        else if(shape_type == "CAPSULE")
-            shape = new phys::shape(*pctx, phys::shape::capsule(bounding_box), params);
-        else if(shape_type == "CYLINDER")
-            shape = new phys::shape(*pctx, phys::shape::cylinder(bounding_box), params);
-        else if(shape_type == "CONE")
-            shape = new phys::shape(*pctx, phys::shape::cone(bounding_box), params);
-        else if(shape_type == "CONVEX_HULL")
-        {
-            shape_assets& sa = data->shared_shapes[mesh_id];
-            if(!sa.convex_hull)
-                sa.convex_hull.reset(create_convex_hull_shape(pctx, gltf_model, mesh, params));
-            shape = new phys::shape(*sa.convex_hull, params);
-        }
-        else if(shape_type == "MESH")
-        {
-            if(
-                collision_data.Get("type").Get<std::string>() == "PASSIVE" &&
-                collision_data.Get("kinematic").Get<bool>() == false
-            ){
-                shape_assets& sa = data->shared_shapes[mesh_id];
-                if(!sa.bvh)
-                    sa.bvh.reset(create_mesh_shape(pctx, gltf_model, mesh, params, true));
-                shape = new phys::shape(*sa.bvh, params);
-            }
-            else
-            {
-                RB_DBG(
-                    "Creating dynamic triangle mesh collision shape for ",
-                    mesh.name, " through ", node.name, ", you probably don't "
-                    "want this because it's very, very slow. Mark the object "
-                    "as passive and non-animated in Blender's rigid body "
-                    "properties to make it a BVH instead, or use a convex hull "
-                    "shape if it needs to be animated."
-                );
-                shape = create_mesh_shape(pctx, gltf_model, mesh, params, false);
-            }
-        }
-        else RB_PANIC(
-            "Cannot create collision shape; unsupported shape type ", shape_type
-        );
+        shape_assets& sa = data->shared_shapes[mesh_id];
+        if(!sa.bvh)
+            sa.bvh.reset(create_mesh_shape(pctx, gltf_model, mesh, params, true));
+        shape = new phys::shape(*sa.bvh, params);
 
         data->shapes.emplace_back(shape);
         if(shape)
