@@ -21,7 +21,7 @@
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
 [submodule "gfx/external/fuchsia_radix_sort"]
 	path = gfx/external/fuchsia_radix_sort
-	url = git@github.com:juliusikkala/fuchsia_radix_sort.git
+	url = https://github.com/juliusikkala/fuchsia_radix_sort.git
     branch = portability
 [submodule "audio/external/LabSound"]
 	path = audio/external/LabSound
